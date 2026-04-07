@@ -158,18 +158,43 @@ export const PlacementDataProvider = ({ children }) => {
   };
 
   const updateApplicationStatus = async (appId, status) => {
+    const normalizedStatus = (status || '').toString().trim().toUpperCase();
+    const payload = { status: normalizedStatus };
+
+    const tryUpdate = async (method, endpoint) => {
+      if (method === 'PATCH') {
+        return API.patch(endpoint, payload);
+      }
+      return API.put(endpoint, payload);
+    };
+
     try {
-      await API.put(`/employer/application/${appId}/status`, { status });
+      await tryUpdate('PUT', `/employer/application/${appId}/status`);
       await refreshData();
       return { success: true };
     } catch (err) {
-      if (isNotFound(err)) {
+      const shouldTryFallback = isNotFound(err)
+        || err?.response?.status === 400
+        || err?.response?.status === 405;
+
+      if (shouldTryFallback) {
         try {
-          await API.put(`/applications/employer/application/${appId}/status`, { status });
+          await tryUpdate('PUT', `/applications/employer/application/${appId}/status`);
           await refreshData();
           return { success: true };
-        } catch (fallbackErr) {
-          return { success: false, message: fallbackErr.response?.data?.message || 'Update failed' };
+        } catch (fallbackErr1) {
+          try {
+            await tryUpdate('PATCH', `/applications/${appId}/status`);
+            await refreshData();
+            return { success: true };
+          } catch (fallbackErr2) {
+            return {
+              success: false,
+              message: fallbackErr2.response?.data?.message
+                || fallbackErr1.response?.data?.message
+                || 'Update failed'
+            };
+          }
         }
       }
       return { success: false, message: err.response?.data?.message || 'Update failed' };
