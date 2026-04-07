@@ -37,7 +37,14 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [roleMenu, setRoleMenu] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const { user, logout, notifications, notificationsLoading, refreshNotifications } = useAuthContext();
+  const {
+    user,
+    logout,
+    notifications,
+    notificationsLoading,
+    refreshNotifications,
+    markAllNotificationsAsRead,
+  } = useAuthContext();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -59,6 +66,11 @@ const Navbar = () => {
     [notifications]
   );
 
+  const unreadNotifications = useMemo(
+    () => (notifications || []).filter((notification) => !notification.isRead),
+    [notifications]
+  );
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -70,6 +82,11 @@ const Navbar = () => {
     setIsNotificationsOpen((current) => !current);
   };
 
+  const handleMarkAllAsRead = async () => {
+    console.log('Mark as Read clicked');
+    await markAllNotificationsAsRead();
+  };
+
   const renderNotificationPanel = () => {
     if (!user || !isNotificationsOpen) return null;
 
@@ -77,19 +94,28 @@ const Navbar = () => {
       <div className="absolute right-0 top-full z-[90] mt-3 w-[22rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
-          <button
-            onClick={refreshNotifications}
-            className="text-xs font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={refreshNotifications}
+              className="text-xs font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400"
+            >
+              Refresh
+            </button>
+            <button
+              onClick={handleMarkAllAsRead}
+              disabled={unreadCount === 0}
+              className="text-xs font-semibold text-slate-700 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-slate-300 dark:hover:text-white"
+            >
+              Mark All as Read
+            </button>
+          </div>
         </div>
 
         <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
           {notificationsLoading ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">Loading notifications...</p>
-          ) : notifications.length ? (
-            notifications.map((notification) => (
+          ) : unreadNotifications.length ? (
+            unreadNotifications.map((notification) => (
               <div
                 key={notification.id}
                 className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800"
@@ -101,7 +127,7 @@ const Navbar = () => {
               </div>
             ))
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">No notifications yet.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">No unread notifications.</p>
           )}
         </div>
 

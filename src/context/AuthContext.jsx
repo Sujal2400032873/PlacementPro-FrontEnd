@@ -25,6 +25,13 @@ export const AuthProvider = ({ children }) => {
     return { ...userData, role, profileCompleted, profileComplete: profileCompleted };
   };
 
+  const normalizeNotifications = useCallback((items) => {
+    return (items || []).map((notification) => ({
+      ...notification,
+      isRead: notification?.isRead ?? notification?.read ?? false,
+    }));
+  }, []);
+
   useEffect(() => {
     const storedUser = localStorage.getItem('placementProUser');
 
@@ -76,7 +83,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('placementProUser', JSON.stringify(userData));
       try {
         const notificationsResponse = await API.get('/notifications');
-        setNotifications(notificationsResponse.data || []);
+        setNotifications(normalizeNotifications(notificationsResponse.data));
       } catch (notificationError) {
         console.error('Notification bootstrap error:', notificationError);
         setNotifications([]);
@@ -146,7 +153,7 @@ export const AuthProvider = ({ children }) => {
     setNotificationsLoading(true);
     try {
       const response = await API.get('/notifications');
-      const nextNotifications = response.data || [];
+      const nextNotifications = normalizeNotifications(response.data);
       setNotifications(nextNotifications);
       return nextNotifications;
     } catch (err) {
@@ -160,7 +167,48 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setNotificationsLoading(false);
     }
-  }, [user, clearAuthState]);
+  }, [user, clearAuthState, normalizeNotifications]);
+
+  const markAllNotificationsAsRead = useCallback(async () => {
+    if (!user) return { success: false, message: 'No user logged in' };
+
+    try {
+      console.log('Mark as Read clicked');
+      console.log('Calling mark-read API');
+      await API.post('/notifications/mark-read');
+      setNotifications((previous) => previous.map((notification) => ({ ...notification, isRead: true })));
+      await refreshNotifications();
+      return { success: true };
+    } catch (err) {
+      console.error('Mark all notifications as read error:', err);
+      return {
+        success: false,
+        message: err.response?.data?.message || 'Unable to mark notifications as read',
+      };
+    }
+  }, [user, refreshNotifications]);
+
+  const markNotificationAsRead = useCallback(async (notificationId) => {
+    if (!user) return { success: false, message: 'No user logged in' };
+    if (!notificationId) return { success: false, message: 'Notification id is required' };
+
+    try {
+      await API.post(`/notifications/${notificationId}/mark-read`);
+      setNotifications((previous) =>
+        previous.map((notification) =>
+          notification.id === notificationId ? { ...notification, isRead: true } : notification
+        )
+      );
+      await refreshNotifications();
+      return { success: true };
+    } catch (err) {
+      console.error('Mark notification as read error:', err);
+      return {
+        success: false,
+        message: err.response?.data?.message || 'Unable to mark notification as read',
+      };
+    }
+  }, [user, refreshNotifications]);
 
   return (
     <AuthContext.Provider
@@ -174,6 +222,8 @@ export const AuthProvider = ({ children }) => {
         logout,
         updateProfile,
         refreshNotifications,
+        markAllNotificationsAsRead,
+        markNotificationAsRead,
       }}
     >
       {children}
