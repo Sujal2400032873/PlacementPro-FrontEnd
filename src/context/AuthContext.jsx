@@ -33,18 +33,51 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('placementProUser');
+    let mounted = true;
 
-    if (storedUser) {
+    const bootstrapSession = async () => {
+      setLoading(true);
       try {
-        setUser(normalizeUser(JSON.parse(storedUser)));
+        const response = await API.get('/auth/me');
+        const resolvedUser = normalizeUser(response.data);
+
+        if (!resolvedUser || !resolvedUser.role) {
+          throw new Error('Authenticated user has no valid role');
+        }
+
+        if (!mounted) return;
+        setUser(resolvedUser);
+        localStorage.setItem('placementProUser', JSON.stringify(resolvedUser));
       } catch (err) {
-        console.error('AuthContext: invalid user JSON', err);
-        localStorage.removeItem('placementProUser');
+        if (!mounted) return;
+
+        if (err?.response?.status && [401, 403].includes(err.response.status)) {
+          clearAuthState();
+        } else {
+          const storedUser = localStorage.getItem('placementProUser');
+          if (storedUser) {
+            try {
+              setUser(normalizeUser(JSON.parse(storedUser)));
+            } catch (parseError) {
+              console.error('AuthContext: invalid user JSON', parseError);
+              localStorage.removeItem('placementProUser');
+              setUser(null);
+            }
+          }
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-    }
-    setLoading(false);
-  }, []);
+    };
+
+    bootstrapSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, [clearAuthState]);
 
   useEffect(() => {
     if (user) {
